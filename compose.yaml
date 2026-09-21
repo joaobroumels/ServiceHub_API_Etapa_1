@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: servicehub-postgres
+    environment:
+      POSTGRES_DB: servicehub
+      POSTGRES_USER: servicehub
+      POSTGRES_PASSWORD: servicehub
+    ports:
+      - "5433:5432"
+    volumes:
+      - servicehub_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U servicehub -d servicehub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  servicehub_postgres_data:

@@ -1,0 +1,260 @@
+{
+  "info": {
+    "_postman_id": "9f57571c-6803-4a39-9f3e-6b1e41f6e9e8",
+    "name": "ServiceHub API - Checkpoint",
+    "description": "Coleção para validar o CRUD de usuários da ServiceHub API na ordem correta.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Criar usuário",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 201 Created\", function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "const responseJson = pm.response.json();",
+              "",
+              "pm.test(\"Resposta possui um ID\", function () {",
+              "    pm.expect(responseJson).to.have.property(\"id\");",
+              "    pm.expect(responseJson.id).to.not.be.null;",
+              "});",
+              "",
+              "pm.test(\"A senha não aparece na resposta\", function () {",
+              "    pm.expect(responseJson).to.not.have.property(\"password\");",
+              "    pm.expect(responseJson).to.not.have.property(\"passwordHash\");",
+              "});",
+              "",
+              "if (responseJson && responseJson.id !== undefined && responseJson.id !== null) {",
+              "    pm.environment.set(\"userId\", String(responseJson.id));",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Maria Silva\",\n  \"email\": \"maria@servicehub.com\",\n  \"password\": \"senha123\",\n  \"phone\": \"62999999999\",\n  \"userType\": \"CLIENT\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/users",
+        "description": "Cria um usuário, valida a resposta e salva o ID retornado em userId. Resultado esperado: 201 Created."
+      },
+      "response": []
+    },
+    {
+      "name": "Listar usuários",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Resposta é uma lista JSON\", function () {",
+              "    pm.expect(pm.response.json()).to.be.an(\"array\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/users",
+        "description": "Lista os usuários cadastrados. Resultado esperado: 200 OK."
+      },
+      "response": []
+    },
+    {
+      "name": "Buscar usuário por ID",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Retorna o usuário criado\", function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(String(responseJson.id)).to.eql(pm.environment.get(\"userId\"));",
+              "    pm.expect(responseJson).to.not.have.property(\"password\");",
+              "    pm.expect(responseJson).to.not.have.property(\"passwordHash\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/users/{{userId}}",
+        "description": "Busca o usuário criado usando a variável userId. Resultado esperado: 200 OK."
+      },
+      "response": []
+    },
+    {
+      "name": "Atualizar usuário",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Telefone foi atualizado\", function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson.phone).to.eql(\"62988888888\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Maria Silva\",\n  \"email\": \"maria@servicehub.com\",\n  \"password\": \"senha123\",\n  \"phone\": \"62988888888\",\n  \"userType\": \"CLIENT\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/users/{{userId}}",
+        "description": "Atualiza o telefone do usuário criado. Resultado esperado: 200 OK."
+      },
+      "response": []
+    },
+    {
+      "name": "Excluir usuário",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 204 No Content\", function () {",
+              "    pm.response.to.have.status(204);",
+              "});",
+              "",
+              "pm.test(\"Resposta sem conteúdo\", function () {",
+              "    pm.expect(pm.response.text()).to.eql(\"\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "{{baseUrl}}/api/users/{{userId}}",
+        "description": "Exclui o usuário depois de todas as requisições que dependem dele. Resultado esperado: 204 No Content."
+      },
+      "response": []
+    },
+    {
+      "name": "Buscar usuário excluído",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 404 Not Found\", function () {",
+              "    pm.response.to.have.status(404);",
+              "});",
+              "",
+              "pm.test(\"Resposta contém mensagem de usuário não encontrado\", function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property(\"message\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/users/{{userId}}",
+        "description": "Confirma que o usuário excluído não existe mais. Resultado esperado: 404 Not Found."
+      },
+      "response": []
+    },
+    {
+      "name": "Testar dados inválidos",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 400 Bad Request\", function () {",
+              "    pm.response.to.have.status(400);",
+              "});",
+              "",
+              "pm.test(\"Resposta informa erros de validação\", function () {",
+              "    const responseJson = pm.response.json();",
+              "    pm.expect(responseJson).to.have.property(\"fieldErrors\");",
+              "    pm.expect(responseJson.fieldErrors).to.be.an(\"object\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"\",\n  \"email\": \"email-invalido\",\n  \"password\": \"123\",\n  \"phone\": \"abc\",\n  \"userType\": null\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/users",
+        "description": "Envia um payload inválido para validar o tratamento de erros. Resultado esperado: 400 Bad Request."
+      },
+      "response": []
+    }
+  ]
+}
