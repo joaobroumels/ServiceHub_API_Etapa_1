@@ -2,7 +2,7 @@
 
 API acadêmica para clientes encontrarem prestadores, consultarem serviços e acompanharem solicitações. Evolução do checkpoint inicial com autenticação JWT, autorização por papel e proprietário, testes, Docker e uma interface GraphQL complementar ao REST.
 
-Repositório: [joaobroumels/ServiceHub](https://github.com/joaobroumels/ServiceHub).
+Repositório: [joaobroumels/ServiceHub_API_Etapa_1](https://github.com/joaobroumels/ServiceHub_API_Etapa_1).
 
 ## Funcionalidades
 
@@ -16,8 +16,8 @@ Repositório: [joaobroumels/ServiceHub](https://github.com/joaobroumels/ServiceH
 Para obter o código:
 
 ```bash
-git clone https://github.com/joaobroumels/ServiceHub.git
-cd ServiceHub
+git clone https://github.com/joaobroumels/ServiceHub_API_Etapa_1.git
+cd ServiceHub_API_Etapa_1
 ```
 
 ## Requisitos
