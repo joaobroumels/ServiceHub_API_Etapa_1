@@ -245,7 +245,3 @@ postman/         Coleções e ambiente para testes manuais
 ```
 
 O fluxo principal é `Controller → Service → Repository → PostgreSQL`. DTOs separam o contrato público das entidades. Campos textuais são validados/sanitizados e as senhas são armazenadas com BCrypt; autenticação não equivale a criptografar o transporte, por isso a publicação deve utilizar HTTPS.
-
-## Entrega
-
-Para o AVA, envie o link do repositório atualizado ou seu ZIP e a apresentação de slides separadamente. Não inclua `.env`, credenciais, `target/` ou relatórios locais. A coleção do checkpoint foi mantida como referência histórica e agora exige ADMIN para o CRUD administrativo. Para demonstrar a nova etapa, utilize a coleção de continuação ou o Swagger com Bearer.
