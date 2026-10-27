@@ -1,0 +1,1318 @@
+{
+  "info": {
+    "_postman_id": "4f2b948b-e288-4c31-9d3c-7365e94f2d4a",
+    "name": "ServiceHub API - Continuação Aulas 08 a 12",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Fluxo real de segurança JWT, autorização por papel/dono, serviços, solicitações, avaliações e GraphQL. Importe também ServiceHub_Local_Continuacao.postman_environment.json e selecione ServiceHub Local. Execute na ordem 01→34, pelo Collection Runner ou manualmente. A primeira requisição gera e-mails únicos, datas futuras e limpa IDs/tokens anteriores; senha fictícia aleatória gerada a cada execução. Não cadastre dados pessoais reais. O cliente da solicitação é derivado do JWT: o payload não aceita clientId. O catálogo e queries GraphQL são públicos. GraphQL pode retornar HTTP 200 com errors[]; testes validam extensions.code. Provider.services usa batch. A segunda solicitação, criada via GraphQL, é cancelada pelo cliente após seus testes. Os registros principais ficam como evidência; somente um serviço separado sem dependentes é excluído ao final. Não rode a exclusão antecipadamente. Coleções antigas de CRUD /api/users agora são legado: gerenciamento geral de usuários exige token ADMIN, e perfil próprio usa /api/users/me. Esta coleção não cria ADMIN por cadastro público."
+  },
+  "item": [
+    {
+      "name": "01 - Registrar prestador (nova execução)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/register",
+        "description": "Inicia uma execução com e-mails únicos. Execute esta requisição primeiro. Somente dados fictícios.",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Prestador Checkpoint\",\n  \"email\": \"{{providerEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"phone\": \"62999999999\",\n  \"role\": \"PROVIDER\",\n  \"bio\": \"Manutenção e suporte de computadores para testes da API.\",\n  \"avatarUrl\": \"https://example.com/provider.png\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const suffix = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);",
+              "pm.environment.set(\"runId\", suffix);",
+              "pm.environment.set(\"providerEmail\", \"provider.\" + suffix + \"@servicehub.test\");",
+              "pm.environment.set(\"clientEmail\", \"client.\" + suffix + \"@servicehub.test\");",
+              "pm.environment.set(\"testPassword\", \"Sh9!\" + pm.variables.replaceIn(\"{{$randomUUID}}\"));",
+              "pm.environment.set(\"scheduledAt\", new Date(Date.now()+2*86400000).toISOString().slice(0,19));",
+              "pm.environment.set(\"graphqlScheduledAt\", new Date(Date.now()+3*86400000).toISOString().slice(0,19));",
+              "[\"providerId\",\"clientId\",\"serviceId\",\"bookingId\",\"graphqlBookingId\",\"reviewId\",\"tempServiceId\",\"providerToken\",\"clientToken\"].forEach(key => pm.environment.set(key, \"\"));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "pm.test(\"Resposta não expõe senha nem hash\", function () {",
+              "  const body = pm.response.json(); pm.expect(body).not.to.have.property(\"password\"); pm.expect(body).not.to.have.property(\"passwordHash\");",
+              "});",
+              "pm.test(\"ID retornado\", function () { pm.expect(pm.response.json().id).to.exist; });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Login prestador",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/login",
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{providerEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "const response = pm.response.json();",
+              "pm.test(\"JWT e usuário provider presentes\", function () { pm.expect(response.accessToken).to.be.a(\"string\").and.not.empty; pm.expect(response.tokenType.toLowerCase()).to.eql(\"bearer\"); pm.expect(response.user.id).to.exist; });",
+              "if (pm.response.code === 200 && response.accessToken && response.user) { pm.environment.set(\"providerToken\", response.accessToken); pm.environment.set(\"providerId\", String(response.user.id)); }",
+              "pm.test(\"Login não expõe senha\", function () { pm.expect(response.user).not.to.have.property(\"password\"); pm.expect(response.user).not.to.have.property(\"passwordHash\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Perfil do prestador autenticado",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/users/me",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{providerToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Resposta não expõe senha nem hash\", function () {",
+              "  const body = pm.response.json(); pm.expect(body).not.to.have.property(\"password\"); pm.expect(body).not.to.have.property(\"passwordHash\");",
+              "});",
+              "pm.test(\"Perfil pertence ao token\", function () { pm.expect(String(pm.response.json().id)).to.eql(pm.environment.get(\"providerId\")); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Prestador cria serviço",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/services",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{providerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Manutenção preventiva de computador\",\n  \"description\": \"Limpeza, diagnóstico e manutenção preventiva de computador. Serviço fictício usado nas evidências do projeto.\",\n  \"price\": 149.9,\n  \"category\": \"MANUTENCAO_COMPUTADORES\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "const body = pm.response.json(); pm.test(\"Serviço criado\", function () { pm.expect(body.id).to.exist; pm.expect(String(body.provider.id)).to.eql(pm.environment.get(\"providerId\")); });",
+              "if (pm.response.code === 201 && body.id) pm.environment.set(\"serviceId\", String(body.id));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Listar prestadores publicamente",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/providers?page=0&size=20&sort=id,asc",
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Página pública sem contato ou senha\", function () { const page=pm.response.json(); pm.expect(page.content).to.be.an(\"array\"); page.content.forEach(p => { [\"email\",\"phone\",\"password\",\"passwordHash\"].forEach(field => pm.expect(p).not.to.have.property(field)); }); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Listar serviços do prestador",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/providers/{{providerId}}/services?page=0&size=20&sort=id,asc",
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Serviço está na página\", function () { pm.expect(pm.response.json().content.some(s => String(s.id) === pm.environment.get(\"serviceId\"))).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Registrar cliente",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/register",
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Cliente Checkpoint\",\n  \"email\": \"{{clientEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"phone\": \"62988888888\",\n  \"role\": \"CLIENT\",\n  \"bio\": \"Cliente de demonstração.\",\n  \"avatarUrl\": null\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "pm.test(\"Resposta não expõe senha nem hash\", function () {",
+              "  const body = pm.response.json(); pm.expect(body).not.to.have.property(\"password\"); pm.expect(body).not.to.have.property(\"passwordHash\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Login cliente",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/login",
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{clientEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "const response = pm.response.json();",
+              "pm.test(\"JWT e usuário client presentes\", function () { pm.expect(response.accessToken).to.be.a(\"string\").and.not.empty; pm.expect(response.tokenType.toLowerCase()).to.eql(\"bearer\"); pm.expect(response.user.id).to.exist; });",
+              "if (pm.response.code === 200 && response.accessToken && response.user) { pm.environment.set(\"clientToken\", response.accessToken); pm.environment.set(\"clientId\", String(response.user.id)); }",
+              "pm.test(\"Login não expõe senha\", function () { pm.expect(response.user).not.to.have.property(\"password\"); pm.expect(response.user).not.to.have.property(\"passwordHash\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Perfil do cliente autenticado",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/users/me",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{clientToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Resposta não expõe senha nem hash\", function () {",
+              "  const body = pm.response.json(); pm.expect(body).not.to.have.property(\"password\"); pm.expect(body).not.to.have.property(\"passwordHash\");",
+              "});",
+              "pm.test(\"Cliente vem do token\", function () { pm.expect(String(pm.response.json().id)).to.eql(pm.environment.get(\"clientId\")); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Cliente solicita serviço (REST)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/requests",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{clientToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"serviceId\": {{serviceId}},\n  \"scheduledAt\": \"{{scheduledAt}}\",\n  \"notes\": \"Solicitação fictícia para testar o fluxo REST.\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "const body=pm.response.json(); pm.test(\"Cliente correto e solicitação criada\", function () { pm.expect(body.id).to.exist; pm.expect(String(body.clientId)).to.eql(pm.environment.get(\"clientId\")); pm.expect(body.status).to.eql(\"PENDING\"); });",
+              "if (pm.response.code === 201 && body.id) pm.environment.set(\"bookingId\", String(body.id));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - Prestador altera solicitação para ACCEPTED",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/requests/{{bookingId}}/status",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{providerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"ACCEPTED\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Estado ACCEPTED\", function () { pm.expect(pm.response.json().status).to.eql(\"ACCEPTED\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 - Prestador altera solicitação para IN_PROGRESS",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/requests/{{bookingId}}/status",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{providerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"IN_PROGRESS\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Estado IN_PROGRESS\", function () { pm.expect(pm.response.json().status).to.eql(\"IN_PROGRESS\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 - Prestador altera solicitação para COMPLETED",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/requests/{{bookingId}}/status",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{providerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"COMPLETED\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Estado COMPLETED\", function () { pm.expect(pm.response.json().status).to.eql(\"COMPLETED\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 - Cliente avalia serviço concluído",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/reviews",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{clientToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"requestId\": {{bookingId}},\n  \"rating\": 5,\n  \"comment\": \"Fluxo completo de demonstração executado com sucesso.\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "const body=pm.response.json(); pm.test(\"Avaliação criada\", function () { pm.expect(body.id).to.exist; pm.expect(body.rating).to.eql(5); });",
+              "if (pm.response.code === 201 && body.id) pm.environment.set(\"reviewId\", String(body.id));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 - Rejeitar segunda avaliação (409)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/reviews",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{clientToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"requestId\": {{bookingId}},\n  \"rating\": 4,\n  \"comment\": \"Tentativa duplicada intencional.\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 - Validar cadastro inválido (400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/register",
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"\",\n  \"email\": \"email-invalido\",\n  \"password\": \"123\",\n  \"phone\": \"abc\",\n  \"role\": null\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Erros de validação detalhados\", function () { pm.expect(pm.response.json().fieldErrors).to.be.an(\"object\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17 - Rejeitar e-mail duplicado (409)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/register",
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Prestador Checkpoint\",\n  \"email\": \"{{providerEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"phone\": \"62999999999\",\n  \"role\": \"PROVIDER\",\n  \"bio\": \"Manutenção e suporte de computadores para testes da API.\",\n  \"avatarUrl\": \"https://example.com/provider.png\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18 - Recurso inexistente (404)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/services/999999999",
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19 - Acesso protegido sem token (401)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/users/me",
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", function () { pm.response.to.have.status(401); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "20 - Login com senha incorreta (401)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/login",
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{clientEmail}}\",\n  \"password\": \"Incorreta123!\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", function () { pm.response.to.have.status(401); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "21 - Token inválido (401)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/users/me",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{invalidToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", function () { pm.response.to.have.status(401); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "22 - Cliente não lista todos os usuários (403)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/users?page=0&size=20",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{clientToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "23 - Cliente não cadastra serviço (403)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/services",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{clientToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Manutenção preventiva de computador\",\n  \"description\": \"Limpeza, diagnóstico e manutenção preventiva de computador. Serviço fictício usado nas evidências do projeto.\",\n  \"price\": 149.9,\n  \"category\": \"MANUTENCAO_COMPUTADORES\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "24 - Prestador não solicita serviço como cliente (403)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/requests",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{providerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"serviceId\": {{serviceId}},\n  \"scheduledAt\": \"{{scheduledAt}}\",\n  \"notes\": \"Teste de autorização.\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "25 - GraphQL: prestadores e serviços (batch)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/graphql",
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"query Providers($first: Int!) { providers(first: $first) { id fullName bio avatarUrl services { id title price category } } }\",\n  \"variables\": {\n    \"first\": 20\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"GraphQL sem erros\", function () { pm.expect(pm.response.json().errors).to.be.undefined; });",
+              "pm.test(\"Perfis públicos sem contato\", function () { pm.response.json().data.providers.forEach(p => { pm.expect(p).not.to.have.property(\"email\"); pm.expect(p).not.to.have.property(\"phone\"); }); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "26 - GraphQL: serviços do prestador",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/graphql",
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"query Services($providerId: ID!, $first: Int!) { servicesByProvider(providerId: $providerId, first: $first) { id title description price category active provider { id fullName } } }\",\n  \"variables\": {\n    \"providerId\": \"{{providerId}}\",\n    \"first\": 20\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"GraphQL sem erros\", function () { pm.expect(pm.response.json().errors).to.be.undefined; });",
+              "pm.test(\"Mesmo serviço disponível no GraphQL\", function () { pm.expect(pm.response.json().data.servicesByProvider.some(s => s.id === pm.environment.get(\"serviceId\"))).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "27 - GraphQL: cliente solicita serviço",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/graphql",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{clientToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"mutation Book($input: BookServiceInput!) { bookService(input: $input) { id serviceId serviceTitle providerId clientId status scheduledAt totalPrice } }\",\n  \"variables\": {\n    \"input\": {\n      \"serviceId\": \"{{serviceId}}\",\n      \"scheduledAt\": \"{{graphqlScheduledAt}}\",\n      \"notes\": \"Solicitação fictícia criada pelo transporte GraphQL.\"\n    }\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"GraphQL sem erros\", function () { pm.expect(pm.response.json().errors).to.be.undefined; });",
+              "const booking=pm.response.json().data.bookService; pm.test(\"Cliente definido pelo JWT\", function () { pm.expect(String(booking.clientId)).to.eql(pm.environment.get(\"clientId\")); pm.expect(booking.status).to.eql(\"PENDING\"); });",
+              "if (booking && booking.id) pm.environment.set(\"graphqlBookingId\", String(booking.id));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "28 - GraphQL: mutation anônima negada",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/graphql",
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"mutation Book($input: BookServiceInput!) { bookService(input: $input) { id serviceId serviceTitle providerId clientId status scheduledAt totalPrice } }\",\n  \"variables\": {\n    \"input\": {\n      \"serviceId\": \"{{serviceId}}\",\n      \"scheduledAt\": \"{{graphqlScheduledAt}}\",\n      \"notes\": \"Solicitação fictícia criada pelo transporte GraphQL.\"\n    }\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Erro de autenticação no envelope GraphQL\", function () { const errors=pm.response.json().errors; pm.expect(errors).to.be.an(\"array\").and.not.empty; pm.expect(errors[0].extensions.code).to.eql(\"UNAUTHORIZED\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "29 - GraphQL: prestador não cria booking",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/graphql",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{providerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"mutation Book($input: BookServiceInput!) { bookService(input: $input) { id serviceId serviceTitle providerId clientId status scheduledAt totalPrice } }\",\n  \"variables\": {\n    \"input\": {\n      \"serviceId\": \"{{serviceId}}\",\n      \"scheduledAt\": \"{{graphqlScheduledAt}}\",\n      \"notes\": \"Solicitação fictícia criada pelo transporte GraphQL.\"\n    }\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Papel PROVIDER negado\", function () { const errors=pm.response.json().errors; pm.expect(errors).to.be.an(\"array\").and.not.empty; pm.expect(errors[0].extensions.code).to.eql(\"FORBIDDEN\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "30 - GraphQL: limite de consulta inválido",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/graphql",
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"query { providers(first: 101) { id fullName } }\",\n  \"variables\": {}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Limite inválido sinalizado\", function () { pm.expect(pm.response.json().errors[0].extensions.code).to.eql(\"BAD_REQUEST\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "31 - Cliente cancela solicitação GraphQL",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/requests/{{graphqlBookingId}}/status",
+        "description": "Encerra a segunda solicitação após as evidências de GraphQL, antes da limpeza final.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{clientToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"CANCELLED\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Solicitação GraphQL cancelada pelo cliente\", function () { pm.expect(pm.response.json().status).to.eql(\"CANCELLED\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "32 - Criar serviço temporário para limpeza",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/services",
+        "description": "A limpeza acontece somente após todas as operações dependentes. Este serviço separado não possui solicitações; o histórico principal fica preservado.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{providerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Serviço temporário sem solicitações\",\n  \"description\": \"Limpeza, diagnóstico e manutenção preventiva de computador. Serviço fictício usado nas evidências do projeto.\",\n  \"price\": 149.9,\n  \"category\": \"MANUTENCAO_COMPUTADORES\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "const body=pm.response.json(); if (pm.response.code === 201 && body.id) pm.environment.set(\"tempServiceId\", String(body.id));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "33 - Excluir serviço temporário (204)",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "{{baseUrl}}/api/services/{{tempServiceId}}",
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{providerToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });",
+              "pm.test(\"Resposta sem conteúdo\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "34 - Confirmar exclusão do temporário (404)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/services/{{tempServiceId}}",
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

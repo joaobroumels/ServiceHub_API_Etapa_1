@@ -1,0 +1,56 @@
+"""Consultas públicas limitadas; mutations exigem Bearer JWT, conforme as regras REST."""
+type Query {
+    """Primeiros 20 prestadores ativos por padrão. first: 1..100."""
+    providers(first: Int = 20): [Provider!]!
+    """Serviços ativos de um prestador. first: 1..100."""
+    servicesByProvider(providerId: ID!, first: Int = 20): [Service!]!
+}
+
+type Mutation {
+    """Cria uma solicitação como CLIENT autenticado. O cliente vem do token."""
+    bookService(input: BookServiceInput!): Booking
+}
+
+"""Perfil público, sem e-mail, telefone ou senha."""
+type Provider {
+    id: ID!
+    fullName: String!
+    bio: String
+    avatarUrl: String
+    """Até 20 serviços ativos por prestador, carregados em lote."""
+    services: [Service!]!
+}
+
+type Service {
+    id: ID!
+    title: String!
+    description: String
+    """Valor decimal como texto, para preservar a precisão monetária."""
+    price: String!
+    category: String!
+    provider: Provider!
+    active: Boolean!
+    createdAt: String!
+    updatedAt: String!
+}
+
+type Booking {
+    id: ID!
+    serviceId: ID!
+    serviceTitle: String!
+    providerId: ID!
+    clientId: ID!
+    status: String!
+    scheduledAt: String!
+    notes: String
+    totalPrice: String!
+    createdAt: String!
+    updatedAt: String!
+}
+
+input BookServiceInput {
+    serviceId: ID!
+    """Data futura ISO local, sem fuso: 2030-12-20T14:00:00."""
+    scheduledAt: String!
+    notes: String
+}

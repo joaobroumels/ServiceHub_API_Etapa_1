@@ -1,0 +1,9 @@
+# Banco acessível somente pela rede interna; use HTTPS no proxy de entrada.
+# docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+services:
+  api:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRINGDOC_API_DOCS_ENABLED: "false"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+      SPRING_JPA_SHOW_SQL: "false"

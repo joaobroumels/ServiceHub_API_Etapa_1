@@ -3,18 +3,53 @@ services:
     image: postgres:17-alpine
     container_name: servicehub-postgres
     environment:
-      POSTGRES_DB: servicehub
-      POSTGRES_USER: servicehub
-      POSTGRES_PASSWORD: servicehub
-    ports:
-      - "5433:5432"
+      POSTGRES_DB: ${DB_NAME:-servicehub}
+      POSTGRES_USER: ${DB_USERNAME:-servicehub}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD no arquivo .env}
     volumes:
       - servicehub_postgres_data:/var/lib/postgresql/data
+    networks:
+      - servicehub
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U servicehub -d servicehub"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: servicehub-api:local
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-servicehub}
+      DB_USERNAME: ${DB_USERNAME:-servicehub}
+      DB_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD no arquivo .env}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET no arquivo .env}
+      JWT_EXPIRATION_SECONDS: ${JWT_EXPIRATION_SECONDS:-86400}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=75.0}
+    ports:
+      - "${API_PORT:-8080}:8080"
+    networks:
+      - servicehub
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+networks:
+  servicehub:
+    driver: bridge
 
 volumes:
   servicehub_postgres_data:

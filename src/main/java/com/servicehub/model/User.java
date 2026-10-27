@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.LocalDateTime;
 
@@ -28,14 +29,21 @@ public class User {
     private String email;
 
     @Column(name = "password_hash", nullable = false, length = 255)
+    @JsonIgnore
     private String passwordHash;
 
     @Column(length = 20)
     private String phone;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "user_type", nullable = false, length = 20)
+    @Column(name = "role", nullable = false, length = 20)
     private UserType userType;
+
+    @Column(columnDefinition = "text")
+    private String bio;
+
+    @Column(name = "avatar_url", length = 500)
+    private String avatarUrl;
 
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
@@ -69,6 +77,11 @@ public class User {
     public void setPhone(String phone) { this.phone = phone; }
     public UserType getUserType() { return userType; }
     public void setUserType(UserType userType) { this.userType = userType; }
+    public UserType getRole() { return userType; }
+    public String getBio() { return bio; }
+    public void setBio(String bio) { this.bio = bio; }
+    public String getAvatarUrl() { return avatarUrl; }
+    public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
     public LocalDateTime getCreatedAt() { return createdAt; }

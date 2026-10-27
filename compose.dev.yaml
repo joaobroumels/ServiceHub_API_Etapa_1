@@ -1,0 +1,10 @@
+# Para desenvolver no VS Code e executar a API pelo Maven:
+# docker compose -f compose.yaml -f compose.dev.yaml up -d postgres
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5433:5432"
+  api:
+    environment:
+      SPRINGDOC_API_DOCS_ENABLED: "true"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "true"

@@ -3,4 +3,18 @@ target/
 *.iml
 .vscode/
 .env
+.env.*
+!.env.example
 *.log
+docs/performance-results/
+performance-results/
+
+# Backups e chaves locais
+*.dump
+*.backup
+*.bak
+backups/
+*.pem
+*.key
+*.p12
+*.pfx
